@@ -4,6 +4,7 @@ from datetime import datetime
 import time	
 from .command import XTBCommand
 from .command import XTBStream
+from .command import XTBPing
 from .structs import XTBTrade
 
 class XTBClient:
@@ -72,6 +73,17 @@ class XTBClient:
 		self.threads[stream.command()] = thr
 		thr.start()
 	
+	def ping(self):
+
+		req = XTBPing(self.sid).get_bytes()
+		sslctx = ssl.create_default_context()
+		sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+		sock.connect(('xapi.xtb.com',self.stream_port))
+		ssock = sslctx.wrap_socket(sock, server_hostname='xapi.xtb.com')
+		ssock.send(req)
+		ssock.close()
+		sock.close()
+
 	def unsubscribe(self, stream):
 		
 		t = self.threads[stream.command()]
@@ -194,9 +206,4 @@ class XTBClient:
 				.add("order", orderid) \
 			)
 		
-		print(res)		
-		
-	def close_trade(self):
-		
-		pass
-		
+		print(res)
