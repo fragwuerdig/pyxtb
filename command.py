@@ -48,3 +48,15 @@ class XTBStream:
 	def get_bytes(self):
 		
 		return json.dumps(self.json_obj).encode("utf-8")
+
+class XTBPing:
+
+	def __init__(self, sid):
+
+		self.json_obj = {}
+		self.json_obj["command"] = "ping"
+		self.json_obj["streamSessionId"] = sid
+
+	def get_bytes(self):
+
+		return json.dumps(self.json_obj).encode("utf-8")
