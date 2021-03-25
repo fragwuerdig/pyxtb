@@ -16,6 +16,10 @@ class XTBCommand:
 		self.json_obj["arguments"][key] = value
 		return self
 	
+	def get(self):
+		
+		return self.json_obj
+	
 	def get_bytes(self):
 		
 		return json.dumps(self.json_obj).encode("utf-8")
