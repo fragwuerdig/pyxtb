@@ -1,11 +1,13 @@
 import json, socket, ssl, pandas
 import numpy, threading
 from datetime import datetime
+from datetime import timedelta
 import time	
 from .command import XTBCommand
 from .command import XTBStream
 from .command import XTBPing
 from .structs import XTBTrade
+import pandas
 
 class XTBClient:
 	
@@ -154,7 +156,6 @@ class XTBClient:
 			XTBCommand("tradeTransaction") \
 				.add("tradeTransInfo", t.get()) \
 		)
-		print(res)
 		
 	def entry(self, name, qty, symbol, is_short = False, stop = None, limit = None):
 		
@@ -205,5 +206,59 @@ class XTBClient:
 			XTBCommand("tradeTransactionStatus") \
 				.add("order", orderid) \
 			)
+	
+	@staticmethod
+	def hist_to_pandas(hist_array):
 		
-		print(res)
+		j = pandas.read_json(json.dumps(hist_array))
+		j = j.drop(columns='ctmString')
+		j['ctm'] = j['ctm']/1000
+		j['ctm'] =pandas.to_datetime(j['ctm'], unit='s')
+		j = j.rename(columns={'ctm':'date'})
+		j = j.set_index('date')
+		# XTB gives close prices as absolute values
+		# the others are differences to open
+		j['close'] = j['open'] + j['close'] 
+		j['high'] = j['open'] + j['high']
+		j['low'] = j['open'] + j['low']
+		return j
+	
+	def history(self, symbol, frame, ticks):
+		
+		req = XTBCommand("getChartRangeRequest")
+		info = {}
+		info["period"] = frame
+		info["ticks"] = ticks
+		n = datetime.now().replace(second=0)
+		n = n.replace(microsecond=0)
+		if frame == 1:
+			pass
+		elif frame == 5:
+			n = n.replace(minute=n.minute - n.minute % 5)
+		elif frame == 15:
+			n = n.replace(minute=n.minute - n.minute % 15)
+		elif frame == 30:
+			n = n.replace(minute=n.minute - n.minute % 30)
+		elif frame == 60:
+			n = n.replace(minute=0)
+		elif frame == 240:
+			n = n.replace(minute=0)
+			n = n.replace(hour=n.hour - n.hour % 4)
+		elif frame == 1440:
+			n = n.replace(minute=0, hour=0)
+		elif frame == 10080:
+			n = n.replace(minute=0, hour=0)
+			dow = n.weekday()
+			n = n - timedelta(days=dow)
+		elif frame == 43200:
+			n = n.replace(minute=0, hour=0, day=1)
+		else:
+			print("invalid frame value")
+			return []
+		n = int(n.timestamp()*1000)
+		info["start"] =  n
+		info["symbol"] = symbol
+		info["end"] = 0
+		req.add("info", info)
+		res = self.request(req)
+		return XTBClient.hist_to_pandas(res["returnData"]["rateInfos"])
