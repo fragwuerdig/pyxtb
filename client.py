@@ -47,7 +47,7 @@ class XTBClient:
 		self.response = json.loads(self.response)
 		return self.response
 	
-	def stream_handler(self, stream, socket_tuple, callback):
+	def stream_handler(self, stream, socket_tuple, callback, user_args):
 		
 		## TODO: TIMEOUT, so that stream_handler is interruptable
 		t = threading.currentThread()
@@ -59,19 +59,19 @@ class XTBClient:
 		while getattr(t, "do_run", True):
 			res = XTBClient.get_full_protocol_block(socket_tuple[2])
 			json_obj = json.loads(res.decode("utf-8"))
-			callback(json_obj["data"], self)
+			callback(user_args, json_obj["data"], self)
 		stop_streaming_command = "stop" + streaming_command
 		stop_stream = XTBStream(stop_streaming_command, stream.sid())
 		socket_tuple[2].send(stop_stream.get_bytes())
 		
 	
-	def subscribe(self, stream, callback):
+	def subscribe(self, stream, callback, user_args):
 		
 		sslctx = ssl.create_default_context()
 		sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
 		sock.connect(('xapi.xtb.com',self.stream_port))
 		ssock = sslctx.wrap_socket(sock, server_hostname='xapi.xtb.com')
-		thr = threading.Thread(target=XTBClient.stream_handler, args=(self, stream, (sslctx, sock, ssock), callback))
+		thr = threading.Thread(target=XTBClient.stream_handler, args=(self, stream, (sslctx, sock, ssock), callback, user_args))
 		self.threads[stream.command()] = thr
 		thr.start()
 	
@@ -225,40 +225,52 @@ class XTBClient:
 	
 	def history(self, symbol, frame, ticks):
 		
+		req = XTBCommand("getServerTime")
+		res = self.request(req)
+		srvtime = int(res["returnData"]["time"]/1000)
+		print(res["returnData"]["timeString"])
+		
 		req = XTBCommand("getChartRangeRequest")
 		info = {}
 		info["period"] = frame
-		info["ticks"] = ticks
-		n = datetime.now().replace(second=0)
-		n = n.replace(microsecond=0)
+		##info["ticks"] = ticks
+		end = datetime.fromtimestamp(srvtime)
 		if frame == 1:
-			pass
+			start = end.replace(second=0, microsecond=0) - timedelta(days=30)
 		elif frame == 5:
-			n = n.replace(minute=n.minute - n.minute % 5)
+			start = end.replace(minute=end.minute - end.minute % 5) - timedelta(days=30)
+			end = int(end.timestamp()*1000   +   5*60)
 		elif frame == 15:
-			n = n.replace(minute=n.minute - n.minute % 15)
+			start = end.replace(minute=end.minute - end.minute % 15) - timedelta(days=30)
 		elif frame == 30:
-			n = n.replace(minute=n.minute - n.minute % 30)
+			start = end.replace(minute=end.minute - end.minute % 30) - timedelta(days=210)
 		elif frame == 60:
-			n = n.replace(minute=0)
+			start = end.replace(minute=0) - timedelta(days=210)
 		elif frame == 240:
-			n = n.replace(minute=0)
-			n = n.replace(hour=n.hour - n.hour % 4)
+			start = end.replace(minute=0, hour=n.hour - n.hour % 4) - timedelta(days=13*30)
 		elif frame == 1440:
-			n = n.replace(minute=0, hour=0)
+			start = end.replace(minute=0, hour=0) - timedelta(days=120*30)
 		elif frame == 10080:
-			n = n.replace(minute=0, hour=0)
-			dow = n.weekday()
-			n = n - timedelta(days=dow)
+			dow = end.weekday()
+			start = end.replace(minute=0, hour=0) - timedelta(days=120*30+dow)
 		elif frame == 43200:
-			n = n.replace(minute=0, hour=0, day=1)
+			start = end.replace(minute=0, hour=0, day=1) - timedelta(days=120*30)
 		else:
 			print("invalid frame value")
 			return []
-		n = int(n.timestamp()*1000)
-		info["start"] =  n
+		
+		start = int(start.timestamp()*1000)
+		info["start"] =  start
 		info["symbol"] = symbol
-		info["end"] = 0
+		info["end"] = end
 		req.add("info", info)
 		res = self.request(req)
-		return XTBClient.hist_to_pandas(res["returnData"]["rateInfos"])
+		ret = XTBClient.hist_to_pandas(res["returnData"]["rateInfos"])
+		ret = ret.tail(ticks)
+		return ret
+	
+	def servertime(self):
+		
+		req = XTBCommand("getServerTime")
+		res = self.request(req)
+		return datetime.utcfromtimestamp(int(res["returnData"]["time"]/1000))
