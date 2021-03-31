@@ -210,6 +210,8 @@ class XTBClient:
 	@staticmethod
 	def hist_to_pandas(hist_array):
 		
+		print("hist array = ")
+		print(hist_array)	
 		j = pandas.read_json(json.dumps(hist_array))
 		j = j.drop(columns='ctmString')
 		j['ctm'] = j['ctm']/1000
