@@ -145,17 +145,18 @@ class XTBClient:
 		if loss is None and profit is None:
 			t = XTBTrade.close(qty, pos_id).of(pos_symb)
 		elif loss is None and profit is not None:
-			t.profit(profit)
+			t.profit(float(profit))
 		elif loss is not None and profit is None:
-			t.loss(loss)
+			t.loss(float(loss))
 		else:
-			t.profit(profit)
-			t.loss(loss)
+			t.profit(float(profit))
+			t.loss(float(loss))
 			
 		res = self.request( \
 			XTBCommand("tradeTransaction") \
 				.add("tradeTransInfo", t.get()) \
 		)
+		print(res)
 		
 	def entry(self, name, qty, symbol, is_short = False, stop = None, limit = None):
 		
@@ -180,7 +181,7 @@ class XTBClient:
 		elif limit is None and stop is not None:
 			use_market_order = False
 			price = float(stop)
-			is_limit = True
+			is_limit = False 
 			
 		if is_short:
 			t = XTBTrade.sell(float(qty), name = name).of(str(symbol))
@@ -208,10 +209,11 @@ class XTBClient:
 			)
 	
 	@staticmethod
-	def hist_to_pandas(hist_array):
-		
-		print("hist array = ")
-		print(hist_array)	
+	def hist_to_pandas(hist_res):
+	
+		digits = hist_res["digits"]
+		precision = 10**(-digits)
+		hist_array = hist_res["rateInfos"]		
 		j = pandas.read_json(json.dumps(hist_array))
 		j = j.drop(columns='ctmString')
 		j['ctm'] = j['ctm']/1000
@@ -223,6 +225,14 @@ class XTBClient:
 		j['close'] = j['open'] + j['close'] 
 		j['high'] = j['open'] + j['high']
 		j['low'] = j['open'] + j['low']
+		j['open'] *= precision
+		j = j.assign(open=[round(elem,digits) for elem in j['open']])	
+		j['high'] *= precision
+		j = j.assign(high=[round(elem,digits) for elem in j['high']])	
+		j['low'] *= precision
+		j = j.assign(low=[round(elem,digits) for elem in j['low']])
+		j['close'] *= precision
+		j = j.assign(close=[round(elem,digits) for elem in j['close']])
 		return j
 	
 	def history(self, symbol, frame, ticks):
@@ -230,7 +240,6 @@ class XTBClient:
 		req = XTBCommand("getServerTime")
 		res = self.request(req)
 		srvtime = int(res["returnData"]["time"]/1000)
-		print(res["returnData"]["timeString"])
 		
 		req = XTBCommand("getChartRangeRequest")
 		info = {}
@@ -267,7 +276,7 @@ class XTBClient:
 		info["end"] = end
 		req.add("info", info)
 		res = self.request(req)
-		ret = XTBClient.hist_to_pandas(res["returnData"]["rateInfos"])
+		ret = XTBClient.hist_to_pandas(res["returnData"])
 		ret = ret.tail(ticks)
 		return ret
 	
