@@ -111,16 +111,16 @@ class XTBTrade:
 	
 	def at(self, price, using_limit=False):
 		
-		self.json_obj["price"] = price
+		self.json_obj["price"] = float(price)
 		if using_limit:
-			if self.json_obj["cmd"] == 0 or t.json_obj["cmd"] == 4:		# BUY MARKET
+			if self.json_obj["cmd"] == 0 or self.json_obj["cmd"] == 4:		# BUY MARKET
 				self.json_obj["cmd"] = 2
-			elif self.json_obj["cmd"] == 1 or t.json_obj["cmd"] == 5:		# SELL MARKET
+			elif self.json_obj["cmd"] == 1 or self.json_obj["cmd"] == 5:		# SELL MARKET
 				self.json_obj["cmd"] = 3
 		else:
-			if self.json_obj["cmd"] == 0 or t.json_obj["cmd"] == 2:		# BUY MARKET
+			if self.json_obj["cmd"] == 0 or self.json_obj["cmd"] == 2:		# BUY MARKET
 				self.json_obj["cmd"] = 4
-			elif self.json_obj["cmd"] == 1 or t.json_obj["cmd"] == 3:		# SELL MARKET
+			elif self.json_obj["cmd"] == 1 or self.json_obj["cmd"] == 3:		# SELL MARKET
 				self.json_obj["cmd"] = 5
 		return self
 	
