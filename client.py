@@ -30,9 +30,10 @@ class XTBClient:
 		self.threads = {}
 	
 	@staticmethod
-	def get_full_protocol_block(sock):
+	def get_full_protocol_block(sock, timeout=None):
 		
 		response = bytearray()
+		sock.settimeout(timeout)
 		while True:
 			partial_response = sock.recv(1)
 			response += partial_response
@@ -57,7 +58,6 @@ class XTBClient:
 	
 	def stream_handler(self, stream, socket_tuple, callback, user_args):
 		
-		## TODO: TIMEOUT, so that stream_handler is interruptable
 		t = threading.currentThread()
 		socket_tuple[2].setblocking(True)
 		socket_tuple[2].send(stream.get_bytes())
@@ -65,7 +65,10 @@ class XTBClient:
 		if streaming_command.startswith("get"):
 			streaming_command = streaming_command[3:]
 		while getattr(t, "do_run", True):
-			res = XTBClient.get_full_protocol_block(socket_tuple[2])
+			try:
+				res = XTBClient.get_full_protocol_block(socket_tuple[2], timeout=.1)
+			except socket.timeout:
+				continue
 			json_obj = json.loads(res.decode("utf-8"))
 			callback(user_args, json_obj["data"], self)
 		stop_streaming_command = "stop" + streaming_command
