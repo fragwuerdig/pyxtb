@@ -3,6 +3,7 @@ import numpy, threading
 from datetime import datetime
 from datetime import timedelta
 import time	
+import logging
 from .command import XTBCommand
 from .command import XTBStream
 from .command import XTBPing
@@ -13,6 +14,7 @@ class XTBClient:
 	
 	def __init__(self, demo=True):
 		
+		self.logger = logging.getLogger("XTBClient")	
 		self.streams = {}
 		self.demo = demo
 		if demo:
@@ -40,11 +42,17 @@ class XTBClient:
 			
 	def request(self, req):
 		
+		self.logger.debug("########## sending request ###########")
+		self.logger.debug(req.json_obj)
+		self.logger.debug("########## end of request  ###########")	
 		data = req.get_bytes()
 		self.main_ssock.send(data)
 		self.response = XTBClient.get_full_protocol_block(self.main_ssock)
 		self.response = self.response.decode("utf-8")
 		self.response = json.loads(self.response)
+		self.logger.debug("########## got response ##########")
+		self.logger.debug(self.response)
+		self.logger.debug("########## response end ##########")
 		return self.response
 	
 	def stream_handler(self, stream, socket_tuple, callback, user_args):
@@ -129,6 +137,16 @@ class XTBClient:
 			return XTBClient.filter_matching_records(res["returnData"], "customComment", name)
 		else:
 			return res["returnData"]
+
+	def symbol(self, sym):
+
+		res = self.request( \
+			XTBCommand("getSymbol") \
+				.add("symbol", sym) \
+		)
+		
+		return res['returnData']	
+	
 	
 	def exit(self, name, qty, loss = None, profit = None):
 		
@@ -140,17 +158,18 @@ class XTBClient:
 		else:
 			print("no such position to exit")
 			return
-		
+	
+		precision = self.symbol(pos_symb)['precision']	
 		t = XTBTrade.modify(qty, pos_id).of(pos_symb)
 		if loss is None and profit is None:
 			t = XTBTrade.close(qty, pos_id).of(pos_symb)
 		elif loss is None and profit is not None:
-			t.profit(float(profit))
+			t.profit(round(float(profit), precsion))
 		elif loss is not None and profit is None:
-			t.loss(float(loss))
+			t.loss(round(float(loss), precision))
 		else:
-			t.profit(float(profit))
-			t.loss(float(loss))
+			t.profit(round(float(profit), precision))
+			t.loss(round(float(loss), precision))
 			
 		res = self.request( \
 			XTBCommand("tradeTransaction") \
